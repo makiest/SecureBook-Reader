@@ -1,0 +1,30 @@
+# =====================================================================
+# PersistentVolumeClaim: Almacenamiento de la biblioteca de libros
+# =====================================================================
+# Por defecto: ReadWriteOnce (cluster vanilla, pod de backend único)
+# El backend tiene replicas: 1 — RWO es suficiente en este escenario.
+#
+# ADAPTACIÓN PARA ADMINS:
+# Si el cluster dispone de almacenamiento compartido (NFS, Longhorn,
+# vSAN en Tanzu/VKS) y se desea escalar en horizontal el backend:
+#
+#   accessModes: ["ReadWriteMany"]
+#   storageClassName: "longhorn"   # o "nfs-client", "vsphere-csi", etc.
+#
+# Ajusta el tamaño (storage) según la colección de libros esperada.
+# =====================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: books-pvc
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  # storageClassName: "standard"  # Descomenta y ajusta si es necesario

@@ -1,0 +1,33 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+generator client {
+  provider = "prisma-client-js"
+}
+model User {
+  id              String  @id @default(uuid())
+  username        String  @unique
+  passwordHash    String?
+  role            String
+  themePreference String?
+}
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  books     Book[]
+}
+model Book {
+  id         String    @id
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+}
+model AppConfig {
+  id             Int     @id @default(1)
+  activeProvider String  @default("none")
+  defaultTheme   String  @default("system")
+  entraConfig    Json?
+  ldapConfig     Json?
+}

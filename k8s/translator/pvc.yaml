@@ -1,0 +1,22 @@
+# =====================================================================
+# PersistentVolumeClaim: Modelos de idioma de LibreTranslate
+# =====================================================================
+# LibreTranslate descarga los modelos de idioma en el primer arranque.
+# Este PVC persiste los modelos para evitar descargas en cada reinicio
+# (los modelos en,es ocupan aproximadamente 1-2 GB).
+# =====================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: translator-pvc
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: translator
+    app.kubernetes.io/component: translation
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+  # storageClassName: "standard"  # Descomenta y ajusta si es necesario

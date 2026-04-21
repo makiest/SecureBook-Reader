@@ -1,0 +1,78 @@
+# =====================================================================
+# Ingress: Punto de entrada externo para Book Reader
+# =====================================================================
+# Por defecto: nginx-ingress controller
+#
+# PRERREQUISITO: nginx-ingress controller instalado en el cluster.
+# Si no está instalado:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+#
+# ADAPTACIÓN PARA OTROS INGRESS CONTROLLERS:
+#
+# ── Traefik ──────────────────────────────────────────────────────────
+# Sustituir las anotaciones nginx.ingress.kubernetes.io/* por:
+#   traefik.ingress.kubernetes.io/router.entrypoints: websecure
+#   traefik.ingress.kubernetes.io/router.tls: "true"
+#
+# ── Gateway API ──────────────────────────────────────────────────────
+# Reemplazar este recurso Ingress por un HTTPRoute apuntando a un
+# Gateway existente en el cluster. Ver memoria/05_despliegue_kubernetes.md
+#
+# CONFIGURACIÓN TLS:
+# Requiere cert-manager instalado. Si no se usa TLS, eliminar el
+# bloque 'tls' y la anotación 'cert-manager.io/cluster-issuer'.
+# =====================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: book-reader-ingress
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: book-reader
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # Redirige HTTP → HTTPS automáticamente
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Aumenta el límite de subida para libros (PDF/EPUB hasta 200MB)
+    nginx.ingress.kubernetes.io/proxy-body-size: "250m"
+    # Timeouts generosos para la subida de libros y traducciones
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    # TLS con cert-manager (eliminar si no se usa cert-manager)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  # ── TLS ───────────────────────────────────────────────────────────
+  # Descomenta y ajusta el host para habilitar HTTPS con cert-manager.
+  # Si no se usa TLS, elimina el bloque tls completo.
+  # tls:
+  #   - hosts:
+  #       - books.tudominio.com
+  #     secretName: book-reader-tls
+
+  rules:
+    # IMPORTANTE: Cambia 'books.tudominio.com' por tu hostname real.
+    # Para pruebas locales (minikube), puedes usar el IP de minikube
+    # y añadirlo a /etc/hosts.
+    - host: books.tudominio.com
+      http:
+        paths:
+          # ── API Backend ─────────────────────────────────────────────
+          # Las rutas /api/* se dirigen al backend Node.js
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          # ── Frontend SPA ────────────────────────────────────────────
+          # El resto de rutas van al frontend Nginx (que devuelve index.html)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

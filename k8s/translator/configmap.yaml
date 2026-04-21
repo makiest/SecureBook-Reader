@@ -1,0 +1,19 @@
+# =====================================================================
+# ConfigMap: Configuración del servicio de traducción (LibreTranslate)
+# =====================================================================
+# LT_LOAD_ONLY: Idiomas cargados. Reducir minimiza uso de RAM.
+# LT_THREADS:   Hilos de inferencia. Ajustar según CPU disponible.
+#               Aumentar mejora el rendimiento pero consume más recursos.
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: translator-config
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: translator
+    app.kubernetes.io/component: translation
+data:
+  LT_LOAD_ONLY: "en,es"
+  LT_THREADS: "4"
+  PYTHONWARNINGS: "ignore"

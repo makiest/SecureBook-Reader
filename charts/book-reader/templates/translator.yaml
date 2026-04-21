@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: translator-config
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+data:
+  LT_THREADS: {{ .Values.translator.threads | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: translator-pvc
+  labels:
+    {{- include "book-reader.selectorLabels" . | nindent 4 }}
+    app: translator
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.translator.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: translator
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "book-reader.selectorLabels" . | nindent 6 }}
+      app: translator
+  template:
+    metadata:
+      labels:
+        {{- include "book-reader.selectorLabels" . | nindent 8 }}
+        app: translator
+    spec:
+      containers:
+        - name: translator
+          image: {{ .Values.registry.url }}/{{ .Values.translator.image.repository }}:{{ .Values.translator.image.tag }}
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: translator-config
+          volumeMounts:
+            - name: models-data
+              mountPath: /home/libretranslate/.local
+      volumes:
+        - name: models-data
+          persistentVolumeClaim:
+            claimName: translator-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: translator
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+  selector:
+    {{- include "book-reader.selectorLabels" . | nindent 4 }}
+    app: translator
+  type: ClusterIP

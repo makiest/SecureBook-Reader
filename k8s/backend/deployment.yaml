@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # ── Registry privado Harbor ─────────────────────────────────────
+      # Crear el secret previamente con:
+      #   kubectl create secret docker-registry harbor-credentials \
+      #     --docker-server=YOUR_HARBOR_URL \
+      #     --docker-username=YOUR_USER \
+      #     --docker-password=YOUR_PASSWORD \
+      #     -n book-reader
+      imagePullSecrets:
+        - name: harbor-credentials
+
+      # ── Init Container: migración de esquema Prisma ─────────────────
+      # Se ejecuta antes del servidor. Aplica el schema de Prisma a la BD.
+      # Si no hay ficheros de migración generados, usa 'prisma db push'.
+      # Para gestión formal de migraciones, generar con 'prisma migrate dev'
+      # y hacer commit de la carpeta prisma/migrations/.
+      initContainers:
+        - name: prisma-migrate
+          image: YOUR_HARBOR_URL/book-reader/backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "⏳ Esperando a que PostgreSQL esté disponible..."
+              until npx prisma migrate deploy --skip-generate 2>&1 | grep -v "error"; do
+                echo "DB no disponible, reintentando en 5s..."
+                sleep 5
+              done
+              echo "✅ Migraciones Prisma aplicadas correctamente."
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DATABASE_URL
+
+      containers:
+        - name: backend
+          # IMPORTANT: Sustituye con la URL de tu registro Harbor
+          image: YOUR_HARBOR_URL/book-reader/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: JWT_SECRET
+            # URL del servicio de traducción (ClusterIP interno)
+            - name: TRANSLATOR_URL
+              value: "http://translator:5000"
+          volumeMounts:
+            # Biblioteca de libros (PVC persistente)
+            - name: books-data
+              mountPath: /app/books
+            # Directorio resources para ficheros de config (emptyDir — config viene de Secrets/env)
+            - name: resources-data
+              mountPath: /app/resources
+          # Liveness probe: el servidor responde
+          livenessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          # Readiness probe: el servidor está listo para recibir tráfico
+          readinessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+      volumes:
+        - name: books-data
+          persistentVolumeClaim:
+            claimName: books-pvc
+        # emptyDir para resources: la configuración real viene de Secrets/env vars.
+        # Si se necesita persistir db_config.json entre reinicios, usar también un PVC pequeño.
+        - name: resources-data
+          emptyDir: {}

@@ -1,0 +1,25 @@
+# =====================================================================
+# PersistentVolumeClaim: Datos de PostgreSQL
+# =====================================================================
+# Por defecto: ReadWriteOnce (cluster vanilla, un único nodo de BD)
+#
+# ADAPTACIÓN PARA ADMINS:
+# En entornos Tanzu/VKS con vSAN o en clusters con NFS/Longhorn:
+# - Cambiar accessModes a ["ReadWriteMany"] si la StorageClass lo soporta
+# - Añadir storageClassName: "vsphere-csi" / "longhorn" / "nfs-client"
+# =====================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: book-reader
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: "standard"  # Descomenta y ajusta si es necesario

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: book-reader
+  labels:
+    app.kubernetes.io/name: book-reader
+    app.kubernetes.io/managed-by: kubectl

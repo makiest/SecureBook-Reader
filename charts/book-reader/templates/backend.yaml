@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secret
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.dbName }}?schema=public"
+  JWT_SECRET: {{ .Values.backend.jwtSecret | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: books-pvc
+  labels:
+    {{- include "book-reader.selectorLabels" . | nindent 4 }}
+    app: backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.backend.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "book-reader.selectorLabels" . | nindent 6 }}
+      app: backend
+  template:
+    metadata:
+      labels:
+        {{- include "book-reader.selectorLabels" . | nindent 8 }}
+        app: backend
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.registry.imagePullSecretName }}
+      initContainers:
+        - name: prisma-migrate
+          image: {{ .Values.registry.url }}/{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "⏳ Esperando a que PostgreSQL esté disponible..."
+              until npx prisma migrate deploy --skip-generate 2>&1 | grep -v "error"; do
+                echo "DB no disponible, reintentando en 5s..."
+                sleep 5
+              done
+              echo "✅ Migraciones Prisma aplicadas correctamente."
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DATABASE_URL
+      containers:
+        - name: backend
+          image: {{ .Values.registry.url }}/{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: JWT_SECRET
+            - name: TRANSLATOR_URL
+              value: "http://translator:5000"
+          volumeMounts:
+            - name: books-data
+              mountPath: /app/books
+            - name: resources-data
+              mountPath: /app/resources
+          livenessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      volumes:
+        - name: books-data
+          persistentVolumeClaim:
+            claimName: books-pvc
+        - name: resources-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    {{- include "book-reader.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    {{- include "book-reader.selectorLabels" . | nindent 4 }}
+    app: backend
+  type: ClusterIP

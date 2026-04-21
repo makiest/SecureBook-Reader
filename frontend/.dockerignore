@@ -1,0 +1,12 @@
+.git
+.gitignore
+node_modules
+npm-debug.log*
+scripts
+memoria
+k8s
+charts
+.DS_Store
+.env
+*.log
+dist

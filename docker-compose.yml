@@ -1,0 +1,51 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./books:/app/books
+      - ./resources:/app/resources
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgresql://reader:readerpass@postgres:5432/bookreader
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://backend:8080
+    restart: unless-stopped
+      
+  translator:
+    image: libretranslate/libretranslate:latest
+    environment:
+      - LT_LOAD_ONLY=en,es
+      - LT_THREADS=4
+      - PYTHONWARNINGS=ignore
+    ports:
+      - "5005:5000"
+    restart: unless-stopped
+    volumes:
+      - translator_data:/home/libretranslate/.local
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=reader
+      - POSTGRES_PASSWORD=readerpass
+      - POSTGRES_DB=bookreader
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  translator_data:
+  pgdata:
